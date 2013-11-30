@@ -19,8 +19,7 @@ insert([{
 		finalize: function(out) {
 			out.avgOnline = out.online / out.count;
 		}
-	}, function(err, curOnline) {
-		assert.ok(!err);
+	}).done(function(curOnline) {
 		assert.equal(curOnline[0].count, 1);
 		assert.equal(curOnline[0].online, 1);
 		done();

@@ -1,19 +1,30 @@
-# mongojs
+<a href="http://promises-aplus.github.com/promises-spec">
+    <img src="http://promises-aplus.github.com/promises-spec/assets/logo-small.png"
+         align="right" alt="Promises/A+ logo" />
+</a>
 
-A [node.js](http://nodejs.org) module for mongodb, that emulates [the official mongodb API](http://www.mongodb.org/display/DOCS/Home) as much as possible. 
-It wraps [mongodb-native](https://github.com/mongodb/node-mongodb-native/) and is available through [npm](http://npmjs.org)
+# promised-mongo
 
-	npm install mongojs
+A slight rewrite of [mongojs](https://github.com/mafintosh/mongojs) to support promises.  Fully
+backwardly-compatible with mongojs, but all functions that accept callbacks now return promises too.
+Promises are [Promises/A+](http://promises-aplus.github.io/promises-spec/) compatible, so you are free
+to use [any compatible promise library](https://github.com/promises-aplus/promises-spec/blob/master/implementations.md).
+The promise library used by this project is [Q](https://github.com/kriskowal/q).
 
-[![build status](https://secure.travis-ci.org/mafintosh/mongojs.png)](http://travis-ci.org/mafintosh/mongojs)
+## Install
+
+promised-mongo is available through [npm](http://npmjs.org):
+
+	npm install promised-mongo
 
 ## Usage
 
-mongojs is easy to use:
+Use promised-mongo just like mongojs, except you can also use the returned promise instead of the
+callback.  Note that a promise isn't returned if a callback is specified.
 
-``` js
-var mongojs = require('mongojs');
-var db = mongojs(connectionString, [collections]);
+```js
+var pmongo = require('promised-mongo');
+var db = pmongo(connectionString, [collections]);
 ```
 
 The connection string should follow the format desribed in [the mongo connection string docs](http://docs.mongodb.org/manual/reference/connection-string/).
@@ -21,16 +32,16 @@ Some examples of this could be:
 
 ``` js
 // simple usage for a local db
-var db = mongojs('mydb', ['mycollection']);
+var db = pmongo('mydb', ['mycollection']);
 
 // the db is on a remote server (the port default to mongo)
-var db = mongojs('example.com/mydb', ['mycollection']);
+var db = pmongo('example.com/mydb', ['mycollection']);
 
 // we can also provide some credentials
-var db = mongojs('username:password@example.com/mydb', ['mycollection']);
+var db = pmongo('username:password@example.com/mydb', ['mycollection']);
 
 // connect now, and worry about collections later
-var db = mongojs('mydb');
+var db = pmongo('mydb');
 var mycollection = db.collection('mycollection');
 ```
 
@@ -39,16 +50,17 @@ The format for callbacks is always `callback(error, value)` where error is null 
 
 ``` js
 // find everything
-db.mycollection.find(function(err, docs) {
+db.mycollection.find().then(function(docs) {
 	// docs is an array of all the documents in mycollection
 });
 
 // find everything, but sort by name
-db.mycollection.find().sort({name:1}, function(err, docs) {
+db.mycollection.find().sort({name:1}).toArray().then(function(docs) {
 	// docs is now a sorted array
 });
 
-// iterate over all whose level is greater than 90.
+// iterate over all whose level is greater than 90.  This still needs a callback,
+// because a promise can't be resolved multiple times.
 db.mycollection.find({level:{$gt:90}}).forEach(function(err, doc) {
 	if (!doc) {
 		// we visited all docs in the collection
@@ -59,13 +71,13 @@ db.mycollection.find({level:{$gt:90}}).forEach(function(err, doc) {
 
 // find a document using a native ObjectId
 db.mycollection.findOne({
-	_id:mongojs.ObjectId('523209c4561c640000000001')
-}, function(err, doc) {
+	_id:pmongo.ObjectId('523209c4561c640000000001')
+}).then(function(doc) {
 	// doc._id.toString() === '523209c4561c640000000001'
 });
 
 // find all named 'mathias' and increment their level
-db.mycollection.update({name:'mathias'}, {$inc:{level:1}}, {multi:true}, function() {
+db.mycollection.update({name:'mathias'}, {$inc:{level:1}}, {multi:true}).then(function() {
 	// the update is complete
 });
 
@@ -74,17 +86,17 @@ db.mycollection.findAndModify({
 	query: { name: 'mathias' },
 	update: { $set: { tag:'maintainer' } },
 	new: true
-}, function(err, doc) {
+}).then(function(doc) {
 	// doc.tag === 'maintainer'
 });
 
 
-// use the save function to just save a document (callback is optional for all writes)
+// use the save function to just save a document
 db.mycollection.save({created:'just now'});
 
 ```
 
-If you provide a callback to `find` or any cursor config operation mongojs will call `toArray` for you
+If you provide a callback to `find` or any cursor config operation promised-mongo will call `toArray` for you
 
 ``` js
 db.mycollection.find({}, function(err, docs) { ... });
@@ -132,28 +144,34 @@ Note that you need to explicitly set the selection parameter in the `find` call.
 
 ## Database commands
 
-With mongojs you can run database commands just like with the mongo shell using `db.runCommand()` 
+With promised-mongo you can run database commands just like with the mongo shell using `db.runCommand()`
 
 ```js
-db.runCommand({ping:1}, function(err, res) {
-	if(!err && res.ok) console.log("we're up");
+db.runCommand({ping:1}).then(function(res) {
+	if(res.ok) console.log("we're up");
 });
 ```
 
 or `db.collection.runCommand()`
 
 ```js
-db.things.runCommand('count', function(err, res) {
+db.things.runCommand('count').then(function(res) {
 	console.log(res);
 });
 ```
 
 ## Replication Sets
 
-Mongojs can also connect to a mongo replication set by providing a connection string with multiple hosts
+Promised-mongo can also connect to a mongo replication set by providing a connection string with multiple hosts
 
 ``` js
-var db = mongojs('rs-1.com,rs-2.com,rs-3.com/mydb?slaveOk=true', ['mycollection']);
+var db = pmongo('rs-1.com,rs-2.com,rs-3.com/mydb?slaveOk=true', ['mycollection']);
 ```
 
 For more detailed information about replica sets see [the mongo replication docs](http://www.mongodb.org/display/DOCS/Replica+Sets)
+
+## Maintenance
+
+I aim to try to keep up to date with changes in mongojs.  Version numbers will stay equivalent, and
+I won't be adding any additional features not supported by mongojs.  Bug reports and pull requests
+welcome.

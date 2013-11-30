@@ -1,15 +1,18 @@
 var mongodb = require('mongodb');
-var thunky = require('thunky');
 var util = require('util');
 var EventEmitter = require('events').EventEmitter;
 var Readable = require('stream').Readable || require('readable-stream');
+var q = require('q');
 
 var DRIVER_COLLECTION_PROTO = mongodb.Collection.prototype;
 var DRIVER_CURSOR_PROTO = mongodb.Cursor.prototype;
 var DRIVER_DB_PROTO = mongodb.Db.prototype;
 
-var noop = function() {};
 
+/**
+ * Executes the given function for each method in the old prototype, which doesn't have a
+ * corresponding property in the new prototype.
+ */
 var forEachMethod = function(oldProto, newProto, fn) {
 	Object.keys(oldProto).forEach(function(methodName) {
 		if (oldProto.__lookupGetter__(methodName) || newProto[methodName]) return;
@@ -18,46 +21,73 @@ var forEachMethod = function(oldProto, newProto, fn) {
 	});
 };
 
-var ensureCallback = function(args) {
-	if (getCallback(args) !== noop) return args;
-	args = Array.prototype.slice.call(args);
-	args.push(noop);
-	return args;
+
+/**
+ * Lazily evaulates an asynchronous callback, once.
+ */
+var thunk = function (callback) {
+	var ran = false,
+			cache = null;
+
+	return function () {
+		if (ran) {
+			// just return the resolved promise.
+			return cache;
+		} else {
+			ran = true;
+			return cache = callback();
+		}
+	};
 };
 
-var getCallback = function(args) {
+
+/**
+ * Splits the args into args + callback.
+ */
+var splitArgs = function (args) {
+	args = Array.prototype.slice.call(args);
 	var callback = args[args.length-1];
-	return typeof callback === 'function' ? callback : noop;
+
+	if (typeof callback === 'function') {
+		args.pop();
+	} else {
+		callback = false;
+	}
+
+	return {
+		args: args,
+		callback: callback
+	};
 };
 
 // Proxy for the native cursor prototype that normalizes method names and
 // arguments to fit the mongo shell.
 
-var Cursor = function(oncursor) {
+var Cursor = function(getcursor) {
 	Readable.call(this, {objectMode:true, highWaterMark:0});
-	this._get = oncursor;
+	this._get = getcursor;
 };
 
 util.inherits(Cursor, Readable);
 
 Cursor.prototype.toArray = function() {
-	this._apply(DRIVER_CURSOR_PROTO.toArray, arguments);
+	return this._apply(DRIVER_CURSOR_PROTO.toArray, arguments);
 };
 
 Cursor.prototype.next = function() {
-	this._apply(DRIVER_CURSOR_PROTO.nextObject, arguments);
+	return this._apply(DRIVER_CURSOR_PROTO.nextObject, arguments);
 };
 
 Cursor.prototype.forEach = function() {
-	this._apply(DRIVER_CURSOR_PROTO.each, arguments);
+	return this._apply(DRIVER_CURSOR_PROTO.each, arguments);
 };
 
 Cursor.prototype.count = function() {
-	this._apply(DRIVER_CURSOR_PROTO.count, arguments);
+	return this._apply(DRIVER_CURSOR_PROTO.count, arguments);
 };
 
 Cursor.prototype.explain = function() {
-	this._apply(DRIVER_CURSOR_PROTO.explain, arguments);
+	return this._apply(DRIVER_CURSOR_PROTO.explain, arguments);
 };
 
 Cursor.prototype.limit = function() {
@@ -77,17 +107,20 @@ Cursor.prototype.sort = function() {
 };
 
 Cursor.prototype.destroy = function() {
-	this._apply(DRIVER_CURSOR_PROTO.close, arguments);
+	var p = this._apply(DRIVER_CURSOR_PROTO.close, arguments);
 	this.push(null);
+	return p;
 };
 
 Cursor.prototype._apply = function(fn, args) {
-	this._get(function(err, cursor) {
-		if (err) return getCallback(args)(err);
-		fn.apply(cursor, args);
-	});
-
-	return this;
+	// separate callback and args.
+	var cargs = splitArgs(args);
+	// return promise, call the callback if specified.
+	return this._get()
+		.then(function (cursor) {
+			return q.nfapply(fn.bind(cursor), cargs.args);
+		})
+		.nodeify(cargs.callback);
 };
 
 Cursor.prototype._read = function() { // 0.10 stream support (0.8 compat using readable-stream)
@@ -99,118 +132,112 @@ Cursor.prototype._read = function() { // 0.10 stream support (0.8 compat using r
 };
 
 Cursor.prototype._config = function(fn, args) {
-	if (typeof args[args.length-1] !== 'function') return this._apply(fn, args);
+	var cargs = splitArgs(args),
+			p = this._apply(fn, cargs.args);
 
-	args = Array.prototype.slice.call(args);
-	var callback = args.pop();
-	return this._apply(fn, args).toArray(callback);
+	// if callback is specified, toArray() will be automatically called
+	// if using promises, toArray() will have to be called manually
+	if (cargs.callback) {
+		return this.toArray(cargs.callback);
+	} else {
+		return this;
+	}
 };
 
 
 // Proxy for the native collection prototype that normalizes method names and
 // arguments to fit the mongo shell.
 
-var Collection = function(oncollection) {
-	this._get = oncollection;
+var Collection = function(getcollection) {
+	this._get = getcollection;
 };
 
 Collection.prototype.find = function() {
-	var args = Array.prototype.slice.call(arguments);
+	var self = this;
+	var cargs = splitArgs(arguments);
 
-	var oncollection = this._get;
-	var oncursor = thunky(function(callback) {
-		args.push(callback);
-		oncollection(function(err, collection) {
-			if (err) return callback(err);
-			collection.find.apply(collection, args);
-		});
+	var getcursor = thunk(function () {
+		return self._get().then(function (collection) {
+				return q.nfapply(collection.find.bind(collection), cargs.args);
+			});
 	});
 
-	if (typeof args[args.length-1] === 'function') {
-		var callback = args.pop();
-
-		oncursor(function(err, cursor) {
-			if (err) return callback(err);
-			cursor.toArray(callback);
-		});
+	if (cargs.callback) {
+		// run toArray if callback specified
+		return getcursor().then(function (cursor) {
+			return q.nfcall(cursor.toArray.bind(cursor));
+		}).nodeify(cargs.callback);
+	} else {
+		// otherwise just return the cursor
+		return new Cursor(getcursor);
 	}
-
-	return new Cursor(oncursor);
 };
 
 Collection.prototype.findOne = function() { // see http://www.mongodb.org/display/DOCS/Queries+and+Cursors
-	var args = Array.prototype.slice.call(arguments);
-	var callback = args.pop();
-
-	this.find.apply(this, args).limit(1).next(callback);
+	var cargs = splitArgs(arguments);
+	return this.find.apply(this, cargs.args).limit(1).next().nodeify(cargs.callback);
 };
 
 Collection.prototype.findAndModify = function(options, callback) {
-	this._apply(DRIVER_COLLECTION_PROTO.findAndModify, [options.query, options.sort || [], options.update || {}, {
+	return this._apply(DRIVER_COLLECTION_PROTO.findAndModify, [options.query, options.sort || [], options.update || {}, {
 		new:!!options.new,
 		remove:!!options.remove,
 		upsert:!!options.upsert,
 		fields:options.fields
-	}, callback || noop]);
+	}]).nodeify(callback);
 };
 
 Collection.prototype.group = function(group, callback) {
-	this._apply(DRIVER_COLLECTION_PROTO.group, [group.key ? group.key : group.keyf, group.cond, group.initial, group.reduce, group.finalize, true, callback]);
+	return this._apply(DRIVER_COLLECTION_PROTO.group, [group.key ? group.key : group.keyf, group.cond, group.initial, group.reduce, group.finalize, true]).nodeify(callback);
 };
 
 Collection.prototype.remove = function() {
 	var self = this;
-	var callback = getCallback(arguments);
+	var cargs = splitArgs(arguments),
+			args = cargs.args;
 
-	if (arguments.length > 1 && arguments[1] === true) { // the justOne parameter
-		this.findOne(arguments[0], function(err, doc) {
-			if (err) return callback(err);
-			if (!doc) return callback(null, 0);
-			self._apply(DRIVER_COLLECTION_PROTO.remove, [doc, callback]);
-		});
-		return;
+	if (args.length > 1 && args[1] === true) { // the justOne parameter
+		return this.findOne(args[0]).then(function(doc) {
+			if (!doc) { return 0; }
+			return self._apply(DRIVER_COLLECTION_PROTO.remove, [doc]);
+		}).nodeify(cargs.callback);
 	}
 
-	this._apply(DRIVER_COLLECTION_PROTO.remove, arguments.length === 0 ? [{}, noop] : ensureCallback(arguments));
+	return this._apply(DRIVER_COLLECTION_PROTO.remove, args).nodeify(cargs.callback);
 };
 
 Collection.prototype.getIndexes = function() {
-	this._apply(DRIVER_COLLECTION_PROTO.indexes, ensureCallback(arguments));
+	return this._apply(DRIVER_COLLECTION_PROTO.indexes, arguments);
 };
 
 Collection.prototype.runCommand = function(cmd, opts, callback) {
-	callback = callback || noop;
 	opts = opts || {};
 	if (typeof opts === 'function') {
 		callback = opts;
-	};
-	this._get(function(err, collection) {
-		if (err) return callback(err);
+	}
+	return this._get().then(function (collection) {
 		var commandObject = {};
 		commandObject[cmd] = collection.collectionName;
 		Object.keys(opts).forEach(function(key) {
 			commandObject[key] = opts[key];
 		});
-		collection.db.command(commandObject, callback);
+		return q.nfcall(collection.db.command.bind(collection.db), commandObject).nodeify(callback);
 	});
 };
 
 forEachMethod(DRIVER_COLLECTION_PROTO, Collection.prototype, function(methodName, fn) {
 	Collection.prototype[methodName] = function() { // we just proxy the rest of the methods directly
-		this._apply(fn, ensureCallback(arguments));
+		return this._apply(fn, arguments);
 	};
 });
 
 Collection.prototype._apply = function(fn, args) {
-	this._get(function(err, collection) {
-		if (err) return getCallback(args)(err);
-		if (!collection.opts || getCallback(args) === noop) return fn.apply(collection, args);
+	var cargs = splitArgs(args);
 
-		var safe = collection.opts.safe;
-		collection.opts.safe = true;
-		fn.apply(collection, args);
-		collection.opts.safe = safe;
-	});
+	return this._get().then(function (collection) {
+		// separate callback and args
+		return q.nfapply(fn.bind(collection), cargs.args);
+	}).nodeify(cargs.callback);
 };
 
 var toConnectionString = function(conf) { // backwards compat config map (use a connection string instead)
@@ -239,42 +266,42 @@ var parseConfig = function(cs) {
 	return cs;
 };
 
-var Database = function(ondb) {
+var Database = function(getdb) {
 	EventEmitter.call(this);
-	this._get = ondb;
+	this._get = getdb;
 };
 
 util.inherits(Database, EventEmitter);
 
 Database.prototype.runCommand = function(opts, callback) {
-	callback = callback || noop;
 	if (typeof opts === 'string') {
 		var tmp = opts;
 		opts = {};
 		opts[tmp] = 1;
 	}
-	this._get(function(err, db) {
-		if (err) return callback(err);
-		if (opts.shutdown === undefined) return db.command(opts, callback);
+	return this._get().then(function (db) {
+		var dbcommand = q.nbind(db.command, db);
+		if (opts.shutdown === undefined) {
+			return dbcommand(opts);
+		}
 		// If the command in question is a shutdown, mongojs should shut down the server without crashing.
-		db.command(opts, function(err) {
+		return dbcommand(opts).then(function (res) {
 			db.close();
-			callback.apply(this, arguments);
+			return result;
 		});
-	});
+	}).nodeify(callback);
 };
 
 Database.prototype.open = function(callback) {
-	this._get(callback); // a way to force open the db, 99.9% of the times this is not needed
+	return this._get().nodeify(callback); // a way to force open the db, 99.9% of the times this is not needed
 };
 
 Database.prototype.getCollectionNames = function(callback) {
-	this.collections(function(err, cols) {
-		if (err) return callback(err);
-		callback(null, cols.map(function(c) {
+	return this.collections().then(function (cols) {
+		return cols.map(function(c) {
 			return c.collectionName;
-		}));
-	});
+		});
+	}).nodeify(callback);
 };
 
 Database.prototype.createCollection = function(name, opts, callback) {
@@ -284,52 +311,55 @@ Database.prototype.createCollection = function(name, opts, callback) {
 	}
 	opts = opts || {};
 	opts.strict = opts.strict !== false;
-	this._apply(DRIVER_DB_PROTO.createCollection, [name, opts, callback || noop]);
+	return this._apply(DRIVER_DB_PROTO.createCollection, [name, opts]).nodeify(callback);
 };
 
 Database.prototype.collection = function(name) {
 	var self = this;
 
-	var oncollection = thunky(function(callback) {
-		self._get(function(err, db) {
-			if (err) return callback(err);
-			db.collection(name, callback);
+	var getcollection = thunk(function () {
+		return self._get().then(function (db) {
+			return q.nfcall(db.collection.bind(db), name);
 		});
 	});
 
-	return new Collection(oncollection);
+	return new Collection(getcollection);
 };
 
 Database.prototype._apply = function(fn, args) {
-	this._get(function(err, db) {
-		if (err) return getCallback(args)(err);
-		fn.apply(db, args);
-	});
+	var cargs = splitArgs(args);
+
+	return this._get().
+		then(function (db) {
+			return q.nfapply(fn.bind(db), cargs.args);
+		})
+		.nodeify(cargs.callback);
 };
 
 forEachMethod(DRIVER_DB_PROTO, Database.prototype, function(methodName, fn) {
 	Database.prototype[methodName] = function() {
-		this._apply(fn, arguments);
+		return this._apply(fn, arguments);
 	};
 });
 
 var connect = function(config, collections) {
 	var connectionString = parseConfig(config);
 
-	var ondb = thunky(function(callback) {
-		mongodb.Db.connect(connectionString, function(err, db) {
-			if (err) return callback(err);
-			that.client = db;
-			that.emit('ready');
-			db.on('error', function(err) {
-				process.nextTick(function() {
-					that.emit('error', err);
+	var getdb = thunk(function () {
+		return q.nfcall(mongodb.Db.connect.bind(mongodb.Db), connectionString)
+			.then(function (db) {
+				that.client = db;
+				that.emit('ready');
+				db.on('error', function(err) {
+					process.nextTick(function() {
+						that.emit('error', err);
+					});
 				});
+				return db;
 			});
-			callback(null, db);
-		});
 	});
-	var that = new Database(ondb);
+
+	var that = new Database(getdb);
 
 	that.bson = mongodb.BSONPure; // backwards compat (require('bson') instead)
 	that.ObjectId = mongodb.ObjectID; // backwards compat
