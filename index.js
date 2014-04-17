@@ -4,9 +4,8 @@ var EventEmitter = require('events').EventEmitter;
 var Readable = require('stream').Readable || require('readable-stream');
 var q = require('q');
 
-var DRIVER_COLLECTION_PROTO = mongodb.Collection.prototype;
-var DRIVER_CURSOR_PROTO = mongodb.Cursor.prototype;
-var DRIVER_DB_PROTO = mongodb.Db.prototype;
+var DriverCollection = mongodb.Collection.prototype;
+var DriverDb = mongodb.Db.prototype;
 
 
 /**
@@ -71,46 +70,63 @@ var Cursor = function(getcursor) {
 util.inherits(Cursor, Readable);
 
 Cursor.prototype.toArray = function() {
-	return this._apply(DRIVER_CURSOR_PROTO.toArray, arguments);
+	return this._apply('toArray', arguments);
 };
 
 Cursor.prototype.next = function() {
-	return this._apply(DRIVER_CURSOR_PROTO.nextObject, arguments);
+	return this._apply('nextObject', arguments);
 };
 
 Cursor.prototype.forEach = function() {
-	return this._apply(DRIVER_CURSOR_PROTO.each, arguments);
+	return this._apply('each', arguments);
 };
 
 Cursor.prototype.count = function() {
-	return this._apply(DRIVER_CURSOR_PROTO.count, arguments);
+	return this._apply('count', arguments);
 };
 
 Cursor.prototype.explain = function() {
-	return this._apply(DRIVER_CURSOR_PROTO.explain, arguments);
+	return this._apply('explain', arguments);
 };
 
 Cursor.prototype.limit = function() {
-	return this._config(DRIVER_CURSOR_PROTO.limit, arguments);
+	return this._config('limit', arguments);
 };
 
 Cursor.prototype.skip = function() {
-	return this._config(DRIVER_CURSOR_PROTO.skip, arguments);
+	return this._config('skip', arguments);
 };
 
 Cursor.prototype.batchSize = function() {
-	return this._config(DRIVER_CURSOR_PROTO.batchSize, arguments);
+	return this._config('batchSize', arguments);
 };
 
 Cursor.prototype.sort = function() {
-	return this._config(DRIVER_CURSOR_PROTO.sort, arguments);
+	return this._config('sort', arguments);
+};
+
+Cursor.prototype.rewind = function() {
+	return this._config('rewind', arguments);
 };
 
 Cursor.prototype.destroy = function() {
-	var p = this._apply(DRIVER_CURSOR_PROTO.close, arguments);
+	var p = this._apply('close', arguments);
 	this.push(null);
 	return p;
 };
+
+Cursor.prototype.map = function(mapfn, callback) {
+	return this.toArray()
+		.then(function (arr) {
+			return arr.map(mapfn);
+		})
+		.nodeify(callback);
+};
+
+Cursor.prototype.size = function(callback) {
+	return this.count(true).nodeify(callback);
+};
+
 
 Cursor.prototype._apply = function(fn, args) {
 	// separate callback and args.
@@ -118,7 +134,7 @@ Cursor.prototype._apply = function(fn, args) {
 	// return promise, call the callback if specified.
 	return this._get()
 		.then(function (cursor) {
-			return q.nfapply(fn.bind(cursor), cargs.args);
+			return q.nfapply(cursor[fn].bind(cursor), cargs.args);
 		})
 		.nodeify(cargs.callback);
 };
@@ -148,9 +164,55 @@ Cursor.prototype._config = function(fn, args) {
 // Proxy for the native collection prototype that normalizes method names and
 // arguments to fit the mongo shell.
 
-var Collection = function(getcollection) {
-	this._get = getcollection;
+var Collection = function(name, oncollection) {
+	this._get = oncollection;
+	this._name = name;
 };
+
+Collection.prototype.aggregate = function() {
+	return this._apply(DriverCollection.aggregate, arguments);
+};
+
+Collection.prototype.count = function() {
+	return this._apply(DriverCollection.count, arguments);
+};
+
+Collection.prototype.createIndex = function() {
+	return this._apply(DriverCollection.createIndex, arguments);
+};
+
+Collection.prototype.distinct = function() {
+	return this._apply(DriverCollection.distinct, arguments);
+};
+
+Collection.prototype.drop = function() {
+	return this._apply(DriverCollection.drop, arguments);
+};
+
+Collection.prototype.dropIndex = function() {
+	return this._apply(DriverCollection.dropIndex, arguments);
+};
+
+Collection.prototype.ensureIndex = function() {
+	return this._apply(DriverCollection.ensureIndex, arguments);
+};
+
+Collection.prototype.isCapped = function() {
+	return this._apply(DriverCollection.isCapped, arguments);
+};
+
+Collection.prototype.mapReduce = function() {
+	return this._apply(DriverCollection.mapReduce, arguments);
+};
+
+Collection.prototype.reIndex = function() {
+	return this._apply(DriverCollection.reIndex, arguments);
+};
+
+Collection.prototype.stats = function() {
+	return this._apply(DriverCollection.stats, arguments);
+};
+
 
 Collection.prototype.find = function() {
 	var self = this;
@@ -179,35 +241,108 @@ Collection.prototype.findOne = function() { // see http://www.mongodb.org/displa
 };
 
 Collection.prototype.findAndModify = function(options, callback) {
-	return this._apply(DRIVER_COLLECTION_PROTO.findAndModify, [options.query, options.sort || [], options.update || {}, {
+	var args = [options.query, options.sort || [], options.update || {}, {
 		new:!!options.new,
 		remove:!!options.remove,
 		upsert:!!options.upsert,
 		fields:options.fields
-	}]).nodeify(callback);
+	}];
+
+	if (callback) {
+		args.push(function (err, doc, obj) {
+			callback(err, doc, (err && err.lastErrorObject) || (obj && obj.lastErrorObject) || { n: 0 });
+		});
+	}
+
+	return this._apply(DriverCollection.findAndModify, args);
 };
 
 Collection.prototype.group = function(group, callback) {
-	return this._apply(DRIVER_COLLECTION_PROTO.group, [group.key ? group.key : group.keyf, group.cond, group.initial, group.reduce, group.finalize, true]).nodeify(callback);
+	return this._apply(DriverCollection.group, [group.key ? group.key : group.keyf, group.cond, group.initial, group.reduce, group.finalize, true]).nodeify(callback);
 };
 
 Collection.prototype.remove = function() {
 	var self = this;
-	var cargs = splitArgs(arguments),
-			args = cargs.args;
+	var cargs = splitArgs(arguments);
+	var args = cargs.args;
+	var cb = false;
+
+	if (cargs.callback) {
+		cb = function (err, doc, errObj) {
+			cargs.callback(err, { n: doc }, errObj);
+		};
+	}
+
 
 	if (args.length > 1 && args[1] === true) { // the justOne parameter
 		return this.findOne(args[0]).then(function(doc) {
-			if (!doc) { return 0; }
-			return self._apply(DRIVER_COLLECTION_PROTO.remove, [doc]);
-		}).nodeify(cargs.callback);
+				if (!doc) { return 0; }
+				var args = [doc];
+				if (cb) { args.push(cb); }
+				return self._apply(DriverCollection.remove, args);
+			})
+			.then(function (result) { return { n: result[0] }; });
+	} else {
+		if (args.length === 0) {
+			args = [{}];
+		}
+		if (cb) {
+			args.push(cb);
+		}
+		return this._apply(DriverCollection.remove, args)
+					.then(function (result) { return { n: result[0] }; });
 	}
+};
 
-	return this._apply(DRIVER_COLLECTION_PROTO.remove, args).nodeify(cargs.callback);
+Collection.prototype.insert = function() {
+	var cargs = splitArgs(arguments);
+	return this._apply(DriverCollection.insert, cargs.args)
+			.then(function (result) {
+				if (Array.isArray(cargs.args[0])) {
+					return result;
+				} else {
+					return result[0];
+				}
+			})
+			.nodeify(cargs.callback);
+};
+
+Collection.prototype.save = function() {
+	var cargs = splitArgs(arguments);
+
+	if (cargs.callback) {
+		cargs.args.push(function (err, doc, lastErrorObject) {
+			if (err) return cargs.callback(err);
+			if (doc === 1) {
+				cargs.callback(err, cargs.args[0], lastErrorObject);
+			} else {
+				cargs.callback(err, doc, { n : 0});
+			}
+		});
+	}
+	return this._apply(DriverCollection.save, cargs.args)
+		.then(function (result) {
+			if (Array.isArray(result)) {
+				if (result[0] === 1) {
+					return cargs.args[0];
+				} else {
+					return result[0];
+				}
+			} else {
+				return result;
+			}
+		});
+};
+
+Collection.prototype.update = function() {
+	var cargs = splitArgs(arguments);
+	return this._apply(DriverCollection.update, cargs.args)
+		.then(function (result) { return result[1]; })
+		.nodeify(cargs.callback);
 };
 
 Collection.prototype.getIndexes = function() {
-	return this._apply(DRIVER_COLLECTION_PROTO.indexes, arguments);
+	return this._apply(DriverCollection.indexes, arguments);
 };
 
 Collection.prototype.runCommand = function(cmd, opts, callback) {
@@ -225,7 +360,11 @@ Collection.prototype.runCommand = function(cmd, opts, callback) {
 	});
 };
 
-forEachMethod(DRIVER_COLLECTION_PROTO, Collection.prototype, function(methodName, fn) {
+Collection.prototype.toString = function() {
+	return this._name;
+};
+
+forEachMethod(DriverCollection, Collection.prototype, function(methodName, fn) {
 	Collection.prototype[methodName] = function() { // we just proxy the rest of the methods directly
 		return this._apply(fn, arguments);
 	};
@@ -235,10 +374,44 @@ Collection.prototype._apply = function(fn, args) {
 	var cargs = splitArgs(args);
 
 	return this._get().then(function (collection) {
-		// separate callback and args
-		return q.nfapply(fn.bind(collection), cargs.args);
-	}).nodeify(cargs.callback);
+		var safe = collection.opts.safe;
+		collection.opts.safe = true;
+
+		if (collection.opts && cargs.callback) {
+			fn.apply(collection, args);
+			collection.opts.safe = safe;
+		} else {
+			return q.nfapply(fn.bind(collection), cargs.args)
+							.then(function (res) { collection.opts.safe = safe; return res; });
+		}
+	});
 };
+
+// EXTENDED FUNCTIONS
+// make lastErrorObject available to promise-returning functions.
+// The 'Ex' variety of the function returns a promise which resolves
+//   an object like { result: ... , lastErrorObject: ... }.
+
+Collection._makeExtendedFn = function(fn) {
+	return function () {
+		var deferred = q.defer();
+		var args = Array.prototype.slice.call(arguments);
+		// add callback function
+		args.push(function (err, doc, obj) {
+			if (err) {
+				deferred.reject(err);
+			} else {
+				deferred.resolve({ result: doc, lastErrorObject: obj });
+			}
+		});
+		fn.apply(this, args);
+		return deferred.promise;
+	};
+};
+
+Collection.prototype.findAndModifyEx
+	= Collection._makeExtendedFn(Collection.prototype.findAndModify);
+
 
 var toConnectionString = function(conf) { // backwards compat config map (use a connection string instead)
 	var options = [];
@@ -266,9 +439,10 @@ var parseConfig = function(cs) {
 	return cs;
 };
 
-var Database = function(getdb) {
+var Database = function(name, getdb) {
 	EventEmitter.call(this);
 	this._get = getdb;
+	this._name = name;
 };
 
 util.inherits(Database, EventEmitter);
@@ -311,7 +485,7 @@ Database.prototype.createCollection = function(name, opts, callback) {
 	}
 	opts = opts || {};
 	opts.strict = opts.strict !== false;
-	return this._apply(DRIVER_DB_PROTO.createCollection, [name, opts]).nodeify(callback);
+	return this._apply(DriverDb.createCollection, [name, opts]).nodeify(callback);
 };
 
 Database.prototype.collection = function(name) {
@@ -323,7 +497,21 @@ Database.prototype.collection = function(name) {
 		});
 	});
 
-	return new Collection(getcollection);
+	return new Collection(this._name+'.'+name, getcollection);
+};
+
+Database.prototype.toString = function() {
+	return this._name;
+};
+
+Database.prototype.getLastError = function (callback) {
+	return this.runCommand('getLastError').then(function (result) {
+		return result.err;
+	}).nodeify(callback);
+};
+
+Database.prototype.getLastErrorObj = function (callback) {
+  return this.runCommand('getLastError').nodeify(callback);
 };
 
 Database.prototype._apply = function(fn, args) {
@@ -336,7 +524,7 @@ Database.prototype._apply = function(fn, args) {
 		.nodeify(cargs.callback);
 };
 
-forEachMethod(DRIVER_DB_PROTO, Database.prototype, function(methodName, fn) {
+forEachMethod(DriverDb, Database.prototype, function(methodName, fn) {
 	Database.prototype[methodName] = function() {
 		return this._apply(fn, arguments);
 	};
@@ -344,6 +532,7 @@ forEachMethod(DRIVER_DB_PROTO, Database.prototype, function(methodName, fn) {
 
 var connect = function(config, collections) {
 	var connectionString = parseConfig(config);
+	var dbName = (connectionString.match(/\/([^\/\?]+)(\?|$)/) || [])[1] || 'db';
 
 	var getdb = thunk(function () {
 		return q.nfcall(mongodb.Db.connect.bind(mongodb.Db), connectionString)
@@ -359,7 +548,7 @@ var connect = function(config, collections) {
 			});
 	});
 
-	var that = new Database(getdb);
+	var that = new Database(dbName, getdb);
 
 	that.bson = mongodb.BSONPure; // backwards compat (require('bson') instead)
 	that.ObjectId = mongodb.ObjectID; // backwards compat

@@ -11,7 +11,8 @@ insert([{
 }], function(db, done) {
 	// Remove just one
 	db.a.remove({type:'water'}, true)
-		.then(function() {
+		.then(function(lastErrorObj) {
+			assert.equal(lastErrorObj.n, 1);
 			return db.a.find({type:'water'}).toArray();
 		})
 		.then(function(docs) {
@@ -21,7 +22,8 @@ insert([{
 			// Normal remove
 			return db.a.remove({type:'water'});
 		})
-		.then(function() {
+		.then(function(lastErrorObj) {
+			assert.equal(lastErrorObj.n, 2);
 			return db.a.find({type:'water'}).toArray();
 		})
 		.then(function(docs) {

@@ -14,6 +14,16 @@ var tests = fs.readdirSync(__dirname).filter(function(file) {
 
 var cnt = 0;
 var all = tests.length;
+var args = process.argv.slice(2);
+
+if (args.length === 1){
+	var skip = +args[0];
+	// if skip is integer
+	if (skip % 1 === 0) {
+		tests = tests.slice(skip);
+		cnt = skip;
+	}
+}
 
 var loop = function() {
 	var next = tests.shift();
