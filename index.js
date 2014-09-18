@@ -488,12 +488,12 @@ Database.prototype.createCollection = function(name, opts, callback) {
 	return this._apply(DriverDb.createCollection, [name, opts]).nodeify(callback);
 };
 
-Database.prototype.collection = function(name) {
+Database.prototype.collection = function(name, options) {
 	var self = this;
 
 	var getcollection = thunk(function () {
 		return self._get().then(function (db) {
-			return q.nfcall(db.collection.bind(db), name);
+			return q.nfcall(db.collection.bind(db), name, options);
 		});
 	});
 
