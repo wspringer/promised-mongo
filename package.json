@@ -8,7 +8,7 @@
     "promise",
     "q"
   ],
-  "version": "0.11.1",
+  "version": "0.11.2",
   "repository": "git://github.com/gordonmleigh/promised-mongo.git",
   "author": "Gordon Mackenzie-Leigh <gordon@stugo.co.uk>",
   "contributors": [

@@ -77,8 +77,33 @@ Cursor.prototype.next = function() {
 	return this._apply('nextObject', arguments);
 };
 
-Cursor.prototype.forEach = function() {
-	return this._apply('each', arguments);
+Cursor.prototype.forEach = function(fn) {
+  if (fn.length == 1) {
+    //the fn is promise type (function (doc) {...})
+    return this._get()
+      .then(function (cursor) {
+        var deferred = q.defer();
+        
+        cursor.each(function (err, doc) {
+          if (err) {
+            deferred.reject(err);
+          } else if (doc) {
+            fn(doc);
+          } else {
+            deferred.resolve();
+          }
+        });
+      
+        return deferred.promise;
+      });
+  } else {
+    //the fn is probably the old type (function (err, doc) {...})
+    this._get()
+      .then(function (cursor) {
+        cursor.each(fn);
+      });
+  }
+  
 };
 
 Cursor.prototype.count = function() {
