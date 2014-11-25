@@ -48,7 +48,7 @@ var mycollection = db.collection('mycollection');
 
 After we connected we can query or update the database just how we would using the mongo API with the exception that the functions return
 a promise for the result rather than the result itself.  Cursor operations such as `find()` and `sort()` return a **cursor**; to get a
-promise for the result, you have to force evaluation using `toArray()`.  The function `findOne()` returns a promise immediately, not a cursor.
+promise for the result, you have to force evaluation using `toArray()`.  Alternatively, you can just call `then()` on the cursor and it will call `toArray()` for you, returning a promise.  The function `findOne()` returns a promise immediately, not a cursor.
 Note that due to [limitations in the Q promise library](https://github.com/kriskowal/q/#the-end), you should call `.done()` at the end of
 any promise chain you aren't returning, in order to throw any uncaught exceptions.  For brevity, the examples in this readme don't do that.
 
@@ -61,15 +61,6 @@ db.mycollection.find().toArray().then(function(docs){
 // find everything, but sort by name
 db.mycollection.find().sort({name:1}).toArray().then(function(docs) {
 	// docs is now a sorted array
-});
-
-// iterate over all whose level is greater than 90.
-db.mycollection.find({level:{$gt:90}}).forEach(function(err, doc) {
-	if (!doc) {
-		// we visited all docs in the collection
-		return;
-	}
-	// doc is a document in the collection
 });
 
 // find a document using a native ObjectId
@@ -98,6 +89,32 @@ db.mycollection.findAndModify({
 // use the save function to just save a document
 db.mycollection.save({created:'just now'});
 
+```
+
+The `forEach` function is a special case.  The library supports the mongojs style:
+
+``` js
+// iterate over all whose level is greater than 90.
+db.mycollection.find({level:{$gt:90}}).forEach(function(err, doc) {
+	if (doc) {
+      //do things with doc
+    } else {
+      //the callback gets called at the end with a null doc
+      console.log('Finished!');
+    }
+});
+```
+
+It also supports a promise version.  If you pass a callback to the `forEach` function with only one argument, you get the promise version.  The promise will resolve (with `undefined`) when the callback has been called for all documents.
+
+``` js
+// iterate over all whose level is greater than 90 (promise version)
+db.mycollection.find({level:{$gt:90}}).forEach(function(doc) {
+	//do things with doc
+})
+.then(function () {
+  console.log('Finished!');
+});
 ```
 
 To access `lastErrorObject` returned by `findAndModify` using the promises API, use the `findAndModifyEx` function:
