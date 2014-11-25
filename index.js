@@ -152,6 +152,12 @@ Cursor.prototype.size = function(callback) {
 	return this.count(true).nodeify(callback);
 };
 
+// If .then is called on a cursor, invoke toArray() and return promise
+Cursor.prototype.then = function() {
+	var promise = this.toArray()
+	return promise.then.apply(promise, arguments);
+};
+
 
 Cursor.prototype._apply = function(fn, args) {
 	// separate callback and args.
@@ -184,7 +190,6 @@ Cursor.prototype._config = function(fn, args) {
 		return this;
 	}
 };
-
 
 // Proxy for the native collection prototype that normalizes method names and
 // arguments to fit the mongo shell.
