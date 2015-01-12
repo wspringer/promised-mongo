@@ -530,6 +530,21 @@ Database.prototype.collection = function(name, options) {
 	return new Collection(this._name+'.'+name, getcollection);
 };
 
+Database.prototype.getSiblingDb = function(connectionString, collections) {
+	var newConnectionString;
+	//[match, host, options]
+	var currentConnection = this.connectionString.match(/^mongodb:\/\/([^\/]+)\/[^?]+(\?.*)?/);
+	//[match, mongodb://, host or db, maybe db]
+	var newConnection = connectionString.match(/^(mongodb:\/\/)?([^\/]+)(\/[^?]+)?/);
+	//if newConnection has the host set then it'll override the current connection
+	if (newConnection[3] !== undefined) {
+		newConnectionString = connectionString;
+	} else {
+		newConnectionString = 'mongodb://' + currentConnection[1] + '/' + newConnection[2];
+	}
+	return module.exports(newConnectionString, collections);
+};
+
 Database.prototype.toString = function() {
 	return this._name;
 };
@@ -579,7 +594,7 @@ var connect = function(config, collections) {
 	});
 
 	var that = new Database(dbName, getdb);
-
+	that.connectionString = connectionString;
 	that.bson = mongodb.BSONPure; // backwards compat (require('bson') instead)
 	that.ObjectId = mongodb.ObjectID; // backwards compat
 
