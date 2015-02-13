@@ -192,8 +192,10 @@ With promised-mongo you can run database commands just like with the mongo shell
 
 ```js
 db.runCommand({ping:1}).then(function(res) {
-	if(!err && res.ok) console.log("we're up");
-});
+	if(res.ok) console.log("we're up");
+}).catch(function(err)
+	if(err) console.log("we aren't up", err);
+);
 ```
 
 or `db.collection.runCommand()`
