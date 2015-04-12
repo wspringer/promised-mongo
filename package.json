@@ -29,7 +29,7 @@
   ],
   "dependencies": {
     "readable-stream": "~1.1.8",
-    "mongodb": "1.4.0",
+    "mongodb": "^1.4.35",
     "q": "~0.9.7"
   },
   "scripts": {
