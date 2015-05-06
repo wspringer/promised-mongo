@@ -83,7 +83,7 @@ Cursor.prototype.forEach = function(fn) {
     return this._get()
       .then(function (cursor) {
         var deferred = q.defer();
-        
+
         cursor.each(function (err, doc) {
           if (err) {
             deferred.reject(err);
@@ -93,7 +93,7 @@ Cursor.prototype.forEach = function(fn) {
             deferred.resolve();
           }
         });
-      
+
         return deferred.promise;
       });
   } else {
@@ -103,7 +103,7 @@ Cursor.prototype.forEach = function(fn) {
         cursor.each(fn);
       });
   }
-  
+
 };
 
 Cursor.prototype.count = function() {
@@ -567,6 +567,31 @@ Database.prototype._apply = function(fn, args) {
 			return q.nfapply(fn.bind(db), cargs.args);
 		})
 		.nodeify(cargs.callback);
+};
+
+Database.prototype.db = function(dbName, callback) {
+	return this._get().then(function (db) {
+		var getdb = thunk(function () {
+			return q.fcall(function () {
+				db = db.db(dbName);
+				that.client = db;
+				that.emit('ready');
+				db.on('error', function(err) {
+					process.nextTick(function() {
+						that.emit('error', err);
+					});
+				});
+				return db;
+			});
+		});
+
+		var that = new Database(dbName, getdb);
+		that.bson = mongodb.BSONPure;
+		that.ObjectId = mongodb.ObjectID;
+
+		return that;
+	})
+	.nodeify(callback);
 };
 
 forEachMethod(DriverDb, Database.prototype, function(methodName, fn) {
