@@ -8,31 +8,31 @@
     "promise",
     "q"
   ],
-  "version": "0.12.0",
+  "license": "MIT",
+  "version": "1.0.0",
   "repository": "git://github.com/gordonmleigh/promised-mongo.git",
   "author": "Gordon Mackenzie-Leigh <gordon@stugo.co.uk>",
   "contributors": [
-    "Gordon Mackenzie-Leigh <gordon@stugo.co.uk>",
-    "Mathias Buus Madsen <mathiasbuus@gmail.com>",
-    "Ian Jorgensen",
-    "Eduardo Sorribas",
-    "Taeho Kim",
-    "Forbes Lindesay",
-    "Robert S.",
-    "Srirangan",
-    "Erkan Yilmaz",
-    "Jake Maskiewicz",
-    "Bjarke Walling",
-    "Tobias Baunbæk",
-    "Benedikt Arnold",
-    "Kevin McTigue"
+    "Gordon Mackenzie-Leigh <gordon@stugo.co.uk>"
   ],
   "dependencies": {
-    "readable-stream": "~1.1.8",
-    "mongodb": "^1.4.35",
-    "q": "~0.9.7"
+    "babel-runtime": "^5.5.5",
+    "bluebird": "^2.9.27",
+    "lodash": "^3.9.3",
+    "mongodb-core": "^1.1.33",
+    "parse-mongo-url": "^1.1.0",
+    "readable-stream": "~1.1.8"
   },
   "scripts": {
-    "test": "node ./tests"
+    "test": "mocha",
+    "main": "dist/index.js"
+  },
+  "devDependencies": {
+    "babel": "^5.5.5",
+    "chai": "^3.0.0",
+    "grunt": "^0.4.5",
+    "grunt-babel": "^5.0.1",
+    "grunt-contrib-clean": "^0.6.0",
+    "load-grunt-tasks": "^3.2.0"
   }
 }

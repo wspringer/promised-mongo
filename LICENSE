@@ -1,4 +1,4 @@
-Copyright (C) 2013-2014 by Gordon Mackenzie-Leigh
+Copyright (C) 2013-2015 by Gordon Mackenzie-Leigh
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -8,10 +8,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ----
 
-This work is an extension of [MongoJS](https://github.com/mafintosh/mongojs)
+This work is based on [MongoJS](https://github.com/mafintosh/mongojs)
 by Mathias Buus Masden and contributors.
 
-Copyright (C) 2011-2014 by Mathias Buus Madsen
+Copyright (C) 2011-2015 by Mathias Buus Madsen
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
