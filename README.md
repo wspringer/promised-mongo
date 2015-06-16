@@ -23,7 +23,7 @@ I no longer use [Q](https://github.com/kriskowal/q) for promises.  This means th
 call the `compatible()` function:
 
 ```js
-var pmongo = require('promised-mongo');
+var pmongo = require('promised-mongo').compatible();
 ```
 
 Other than dropping support for callbacks, I have tried to make sure that the new library is
