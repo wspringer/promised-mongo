@@ -5,11 +5,8 @@
 
 # promised-mongo
 
-A slight rewrite of [mongojs](https://github.com/mafintosh/mongojs) to support promises.  To aid with
-migration, this API is fully backwardly-compatible with mongojs, but all functions that accept callbacks now return promises too.
-Promises are [Promises/A+](http://promises-aplus.github.io/promises-spec/) compatible, so you are free
-to use [any compatible promise library](https://github.com/promises-aplus/promises-spec/blob/master/implementations.md).
-The promise library used by this project is [Q](https://github.com/kriskowal/q).
+A complete rewrite of [mongojs](https://github.com/mafintosh/mongojs) to support promises.  In a
+break with previous versions, this library only supports promises, and not callbacks.
 
 
 ## Install
@@ -18,17 +15,62 @@ promised-mongo is available through [npm](http://npmjs.org):
 
 	npm install promised-mongo
 
+
+## Compatability with previous versions
+
+I no longer use [Q](https://github.com/kriskowal/q) for promises.  This means that you can't  use
+`.done()` at the end of promise chains.  To turn on compatability with previous versions, you can
+call the `compatible()` function:
+
+```js
+var pmongo = require('promised-mongo');
+```
+
+Other than dropping support for callbacks, I have tried to make sure that the new library is
+compatible with the old tests (see the legacy_tests folder).
+
+
+## How I write JavaScript
+
+I like using [async functions](https://github.com/lukehoban/ecmascript-asyncawait) from current
+EMCAScript proposals.  This makes node amazingly easier to understand.  An example from the tests:
+
+```js
+it('returns all documents', async function () {
+  let docs = [{hello: 'world'}, {hello: 'kitty'}];
+  await collection.insert(docs);
+  let cursor = collection.find();
+  expect(cursor).to.be.an.instanceof(Cursor);
+  let result = await cursor.toArray();
+  expect(result).to.deep.have.members(docs);
+});
+```
+
+Isn't it so much easier to understand?  The downsides (of course there had to be some) is that since
+this is so bleeding edge, editor support and debugging support are varied and patchy, and there's a
+chance that the feature won't even make it to the final language specification.
+
+This is compiled to ES5 using [babel](https://babeljs.io/).
+
+
+## Documentation
+
+The documentation below refers to an older version.  Most of it should still work the same however.
+Watch this space for improvements.
+
+
 ## Usage
 
-Use promised-mongo just like mongojs, except you can also use the returned promise instead of the
-callback.  Note that a promise isn't returned if a callback is specified.
+Use promised-mongo just like mongojs, except that you use the returned promise instead of a
+callback.
 
 ```js
 var pmongo = require('promised-mongo');
 var db = pmongo(connectionString, [collections]);
 ```
 
-The connection string should follow the format desribed in [the mongo connection string docs](http://docs.mongodb.org/manual/reference/connection-string/).
+The connection string should follow the format desribed in
+[the mongo connection string docs](http://docs.mongodb.org/manual/reference/connection-string/).
 Some examples of this could be:
 
 ``` js
