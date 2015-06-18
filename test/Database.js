@@ -111,4 +111,13 @@ describe('Database', function () {
       await db.stats();
     });
   });
+
+  describe('getSiblingDb', function () {
+    it('succeeds', async function () {
+      let db2 = await db.getSiblingDb('test');
+      expect(db2).to.exist;
+      expect(db2._serverPromise).to.exist;
+      expect(db2.config.dbName).to.equal('test');
+    });
+  });
 });
