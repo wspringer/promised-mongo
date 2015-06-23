@@ -1,6 +1,7 @@
 import {expect} from 'chai';
 import Database from '../lib/Database';
 import Cursor from '../lib/Cursor';
+import {ObjectId} from '../index.js';
 
 require('bluebird').longStackTraces();
 
@@ -132,6 +133,22 @@ describe('Collection', function () {
       expect(result.hello).to.be.undefined;
       expect(result.another).to.equal('value');
     });
+
+    it('assumes the query is for _id if it is an ObjectId', async function () {
+      let id = new ObjectId();
+      await collection.insert({_id: id, hello: 'world'}, {hello: 'kitty'});
+      let results = await collection.find(id);
+      expect(results).to.have.length(1);
+      expect(results[0].hello).to.equal('world');
+    });
+
+    it('assumes the query is for _id if it is not an object', async function () {
+      let id = 1;
+      await collection.insert({_id: id, hello: 'world'}, {hello: 'kitty'});
+      let results = await collection.find(id);
+      expect(results).to.have.length(1);
+      expect(results[0].hello).to.equal('world');
+    });
   });
 
   describe('findAndModify', function () {
@@ -235,6 +252,20 @@ describe('Collection', function () {
       let result = await collection.findOne();
       expect(result.id).to.equal(1);
       expect(result.hello).to.equal('you');
+    });
+
+    it('assumes the query is for _id if it is an ObjectId', async function () {
+      let id = new ObjectId();
+      await collection.insert({_id: id, hello: 'world'}, {hello: 'kitty'});
+      let result = await collection.findOne(id);
+      expect(result.hello).to.equal('world');
+    });
+
+    it('assumes the query is for _id if it is not an object', async function () {
+      let id = 1;
+      await collection.insert({_id: id, hello: 'world'}, {hello: 'kitty'});
+      let result = await collection.findOne(id);
+      expect(result.hello).to.equal('world');
     });
   });
 
@@ -382,6 +413,20 @@ describe('Collection', function () {
       result = await collection.find({type: 'water'});
       expect(result.length).to.equal(0);
     });
+
+    it('assumes the query is for _id if it is an ObjectId', async function () {
+      let id = new ObjectId();
+      await collection.insert({_id: id, hello: 'world'});
+      await collection.remove(id);
+      expect(await collection.findOne(id)).to.not.exist;
+    });
+
+    it('assumes the query is for _id if it is not an object', async function () {
+      let id = 1;
+      await collection.insert({_id: id, hello: 'world'});
+      await collection.remove(id);
+      expect(await collection.findOne(id)).to.not.exist;
+    });
   });
 
   describe('save', function () {
@@ -428,6 +473,22 @@ describe('Collection', function () {
 
       let cmp = await collection.find({updated: true});
       expect(cmp.length).to.equal(2);
+    });
+
+    it('assumes the query is for _id if it is an ObjectId', async function () {
+      let id = new ObjectId();
+      await collection.insert({_id: id, hello: 'world'});
+      await collection.update(id, {$set: {hello: 'kitty'}});
+      let result = await collection.findOne(id);
+      expect(result.hello).to.equal('kitty');
+    });
+
+    it('assumes the query is for _id if it is not an object', async function () {
+      let id = 1;
+      await collection.insert({_id: id, hello: 'world'});
+      await collection.update(id, {$set: {hello: 'kitty'}});
+      let result = await collection.findOne(id);
+      expect(result.hello).to.equal('kitty');
     });
   });
 });
