@@ -9,7 +9,7 @@
     "q"
   ],
   "license": "MIT",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "repository": "git://github.com/gordonmleigh/promised-mongo.git",
   "author": "Gordon Mackenzie-Leigh <gordon@stugo.co.uk>",
   "contributors": [
