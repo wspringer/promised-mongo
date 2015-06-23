@@ -72,6 +72,8 @@ createDatabase.compatible = function () {
       });
   };
 
+  Database.prototype.db = Database.prototype.getSiblingDb;
+
   return this;
 };
 
