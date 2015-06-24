@@ -60,6 +60,12 @@ describe('Collection', function () {
       let count = await db.collection('system.indexes').count({'key.number': 1});
       expect(count).to.equal(1);
     });
+
+    it('adds an index to the system.indexes collection with the specified full text options', async function () {
+      await collection.createIndex({name: 'text', tags: 'text'}, {default_language: 'english', weights: {name: 10, tags: 5}, name: 'testFtIndex'});
+      let index = await db.collection('system.indexes').findOne({'name': 'testFtIndex'});
+      expect(index.weights).to.deep.equal({name: 10, tags: 5});
+    });
   });
 
   describe('distinct', function () {
