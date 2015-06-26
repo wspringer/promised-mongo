@@ -3,31 +3,38 @@ var Collection = require('./dist/Collection');
 var mongodb = require('mongodb-core');
 var coreJs = require('babel-runtime/core-js').default;
 
+var ES2015Proxy = null;
+
+if (typeof Proxy !== 'undefined') {
+  ES2015Proxy = require('harmony-proxy');
+}
+
 
 function createDatabase(connectionString, collections) {
   var db = new Database(connectionString, collections);
+
+  db.ObjectId = mongodb.BSON.ObjectId;
+  db.DBRef = mongodb.BSON.DBRef;
+  db.Timestamp = mongodb.BSON.Timestamp;
+  db.MinKey = mongodb.BSON.MinKey;
+  db.MaxKey = mongodb.BSON.MaxKey;
+  db.NumberLong = mongodb.BSON.Long;
+
   var ret;
 
-  if (typeof Proxy !== 'undefined') {
-    ret = Proxy.create({
-      get: function (object, property) {
-        if (db[property]) {
-          return db[property];
+  if (ES2015Proxy) {
+    ret = new ES2015Proxy(db, {
+      get: function (target, property) {
+        if (target[property]) {
+          return target[property];
         } else {
-          return db[property] = db.collection(property);
+          return target[property] = target.collection(property);
         }
       }
     });
   } else {
     ret = db;
   }
-
-  ret.ObjectId = mongodb.BSON.ObjectId;
-  ret.DBRef = mongodb.BSON.DBRef;
-  ret.Timestamp = mongodb.BSON.Timestamp;
-  ret.MinKey = mongodb.BSON.MinKey;
-  ret.MaxKey = mongodb.BSON.MaxKey;
-  ret.NumberLong = mongodb.BSON.Long;
 
   return ret;
 }

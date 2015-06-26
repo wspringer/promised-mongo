@@ -76,7 +76,7 @@ describe('Database', function () {
   });
 
   describe('getCollectionNames', function() {
-    it('succeed', async function () {
+    it('succeeds', async function () {
       await db.createCollection('foo');
       var collections = await db.getCollectionNames();
       expect(collections).to.include.members(['foo']);
@@ -84,13 +84,13 @@ describe('Database', function () {
   });
 
   describe('getLastError', function() {
-    it('succeed', async function () {
+    it('succeeds', async function () {
       await db.getLastError();
     });
   });
 
   describe('getLastErrorObj', function() {
-    it('succeed', async function () {
+    it('succeeds', async function () {
       await db.getLastErrorObj();
     });
   });
@@ -107,7 +107,7 @@ describe('Database', function () {
   });
 
   describe('stats', function() {
-    it('succeed', async function () {
+    it('succeeds', async function () {
       await db.stats();
     });
   });

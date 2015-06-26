@@ -18,6 +18,7 @@
   "dependencies": {
     "babel-runtime": "^5.5.5",
     "bluebird": "^2.9.27",
+    "harmony-proxy": "0.0.2",
     "lodash": "^3.9.3",
     "mongodb-core": "^1.1.33",
     "parse-mongo-url": "^1.1.0",
