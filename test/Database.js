@@ -24,13 +24,6 @@ describe('Database', function () {
     });
   });
 
-  describe('connect', function () {
-    it('succeeds', async function() {
-      let result = await db.connect();
-      expect(result).to.be.not.null;
-    });
-  });
-
   describe('collection', function () {
     it('returns a Collection object', function () {
       let result = db.collection('foo');
