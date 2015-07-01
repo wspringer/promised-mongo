@@ -11,7 +11,7 @@ describe('Collection', function () {
   let collection;
 
   beforeEach(async function () {
-    db = new Database('pmongo_test');
+    db = new Database('pmongo_test', {emitError: true});
     await db.dropDatabase();
     collection = db.collection('docs');
   });
@@ -337,6 +337,20 @@ describe('Collection', function () {
       let result = await collection.find();
       expect(result).to.deep.have.members(docs);
     });
+
+    it('throws an exception for an index violation', async function () {
+      // issue #24
+      await collection.createIndex({email: 1}, {unique: true});
+      await collection.insert({email: 'foo@test.co.uk'});
+
+      try {
+        await collection.insert({email: 'foo@test.co.uk'});
+        expect(false).to.be.ok;
+      } catch (e) {
+        expect(e.code).to.equal(11000);
+        expect(e).to.be.an.instanceof(Error);
+      }
+    });
   });
 
   describe('isCapped', function () {
@@ -495,6 +509,21 @@ describe('Collection', function () {
       await collection.update(id, {$set: {hello: 'kitty'}});
       let result = await collection.findOne(id);
       expect(result.hello).to.equal('kitty');
+    });
+
+    it('throws an exception for an index violation', async function () {
+      // issue #24
+      await collection.createIndex({email: 1}, {unique: true});
+      await collection.insert({email: 'foo@test.co.uk'});
+      await collection.insert({email: 'bar@test.co.uk'});
+
+      try {
+        await collection.update({email: 'foo@test.co.uk'}, {email: 'bar@test.co.uk'});
+        expect(false).to.be.ok;
+      } catch (e) {
+        expect(e.code).to.equal(11000);
+        expect(e).to.be.an.instanceof(Error);
+      }
     });
   });
 });

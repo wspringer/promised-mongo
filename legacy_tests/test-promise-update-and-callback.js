@@ -5,7 +5,6 @@ insert([{
 	hello:'world'
 }], function(db, done) {
 	var sync = true;
-	debugger;
 	db.a.update({hello:'world'}, {$set:{hello:'verden'}})
 		.then(function(lastErrorObject) {
 			assert.ok(!sync);
