@@ -10,8 +10,8 @@ if (typeof Proxy !== 'undefined') {
 }
 
 
-function createDatabase(connectionString, collections) {
-  var db = new Database(connectionString, collections);
+function createDatabase(connectionString, options, collections) {
+  var db = new Database(connectionString, options, collections);
 
   db.ObjectId = mongodb.BSON.ObjectId;
   db.DBRef = mongodb.BSON.DBRef;
