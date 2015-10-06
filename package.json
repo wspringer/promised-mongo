@@ -20,7 +20,7 @@
     "bluebird": "^2.9.27",
     "harmony-proxy": "0.0.2",
     "lodash": "^3.9.3",
-    "mongodb-core": "^1.1.33",
+    "mongodb-core": "^1.2.16",
     "parse-mongo-url": "^1.1.0",
     "readable-stream": "~1.1.8"
   },
